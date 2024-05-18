@@ -37,6 +37,7 @@ ADD config/nginxEnv.conf /etc/nginx/modules/nginxEnv.conf
 ADD ./ /var/www/html/
 
 # install bower dependencies
+RUN npm config set unsafe-perm true
 RUN npm install -g yarn && cd /var/www/html/ && yarn install
 
 EXPOSE 80
