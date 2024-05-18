@@ -88,9 +88,11 @@ jQuery(document).ready(function(){
 
             Papa.parse("data/result.csv", {
                 download: true,
+                delimiter: ",",
                 step: function(row) { //using stream to allow huge file progressing
                     parseManager.i++;
-                    let dataArr = row.data[0];
+                    let dataArr = row.data;
+
                     if (!parseManager.header || parseManager.i === 1){
                         parseManager.header = dataArr;
                     } else {
