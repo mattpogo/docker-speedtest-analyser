@@ -14,20 +14,32 @@ from speedtest import Speedtest
 CSV_FIELDNAMES=["timestamp", "ping", "download", "upload"]
 FILEPATH = os.path.dirname(os.path.abspath(__file__)) + '/../data/result.csv'
 
+def do_speed_test():
+        servers = []
+        threads = None
+        try:
+                s = Speedtest()
+                s.get_servers(servers)
+                s.get_best_server()
+                s.download(threads=threads)
+                s.upload(threads=threads, pre_allocate=False)
+                return s.results.dict(), None
+        except Exception as e:
+                return None, e
+
 def runSpeedtest():
         #run speedtest-cli
         print('--- running speedtest ---')
 
         #execute speedtest
-        servers = []
-        threads = None
-
-        s = Speedtest()
-        s.get_servers(servers)
-        s.get_best_server()
-        s.download(threads=threads)
-        s.upload(threads=threads, pre_allocate=False)
-        result = s.results.dict()
+        result, ex = do_speed_test()
+        retries = 0
+        while not result and retries < 10:
+                time.sleep(60)
+                retries += 1
+                result, ex = do_speed_test()
+        if not result:
+                print(f'Error running SpeedTest: {ex}')
 
         #collect speedtest data
         ping = round(result['ping'], 2)
