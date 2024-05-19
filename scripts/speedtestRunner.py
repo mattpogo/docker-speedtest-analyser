@@ -35,7 +35,9 @@ def runSpeedtest():
         result, ex = do_speed_test()
         retries = 0
         while not result and retries < 10:
+                print(ex)
                 time.sleep(60)
+                print('retrying...')
                 retries += 1
                 result, ex = do_speed_test()
         if not result:
