@@ -39,7 +39,8 @@ def runSpeedtest():
                 retries += 1
                 result, ex = do_speed_test()
         if not result:
-                print(f'Error running SpeedTest: {ex}')
+                print('Error running SpeedTest:')
+                print(ex)
 
         #collect speedtest data
         ping = round(result['ping'], 2)
