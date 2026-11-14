@@ -14,7 +14,7 @@ cat /var/www/html/config/crontab
 crontab /var/www/html/config/crontab
 
 echo "Starting Cronjob"
-crond -l 2 -f &
+crond -l 0 -f >/dev/null 2>&1 &
 
 echo "Starting nginx"
 exec nginx -g "daemon off;"

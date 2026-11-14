@@ -64,9 +64,91 @@ jQuery(document).ready(function(){
                 intersect: true
             },
             responsive: true,
+            maintainAspectRatio: false,
             multiTooltipTemplate: "<%if (datasetLabel){%><%=datasetLabel%>: <%}%><%= value %> <%if (datasetLabel != appConfig.labels.ping){%>MBits/s<%}%>"
         }
     });
+
+    /**
+     * second chart: average download/upload per hour of day (00 - 23)
+     */
+    let hourlyData = {
+        labels: [],
+        datasets: [
+            {
+                label: appConfig.labels.upload,
+                isMB: true,
+                backgroundColor: colors.green,
+                borderColor: colors.green,
+                borderWidth: 1
+            },
+            {
+                label: appConfig.labels.download,
+                isMB: true,
+                backgroundColor: colors.orange,
+                borderColor: colors.orange,
+                borderWidth: 1
+            }
+        ]
+    };
+    let hourlyChartDom = jQuery("#hourlyChart").get(0).getContext("2d");
+    let hourlyChartJS = new Chart(hourlyChartDom, {
+        type: "bar",
+        data: hourlyData,
+        options: {
+            tooltips: {
+                mode: 'index',
+                intersect: false,
+                callbacks: {
+                    label: function(item, data){
+                        return data.datasets[item.datasetIndex].label + ": " + item.yLabel + ' MBits/s';
+                    }
+                }
+            },
+            hover: {
+                mode: 'nearest',
+                intersect: true
+            },
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                yAxes: [{
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'MBits/s'
+                    }
+                }]
+            }
+        }
+    });
+
+    /**
+     * aggregate measured rows by hour of day (00 - 23)
+     *
+     * @param rows array of measureRow objects
+     * @returns {{upload: number[], download: number[]}}
+     */
+    let aggregateByHourOfDay = function(rows){
+        let sum = {
+            upload: new Array(24).fill(0),
+            download: new Array(24).fill(0),
+            count: new Array(24).fill(0)
+        };
+        rows.forEach(function(row){
+            let hour = moment(new Date(row['timestamp'])).hours();
+            sum.upload[hour] += parseFloat(row['upload']);
+            sum.download[hour] += parseFloat(row['download']);
+            sum.count[hour]++;
+        });
+        return {
+            upload: sum.upload.map(function(total, hour){
+                return sum.count[hour] ? Math.round(total / sum.count[hour] * 100) / 100 : null;
+            }),
+            download: sum.download.map(function(total, hour){
+                return sum.count[hour] ? Math.round(total / sum.count[hour] * 100) / 100 : null;
+            })
+        };
+    };
 
 
     let ParseManager = function(){
@@ -89,6 +171,9 @@ jQuery(document).ready(function(){
             Papa.parse("data/result.csv", {
                 download: true,
                 delimiter: ",",
+                complete: function(){
+                    parseManager.updateHourlyChart();
+                },
                 step: function(row) { //using stream to allow huge file progressing
                     parseManager.i++;
                     let dataArr = row.data;
@@ -127,6 +212,9 @@ jQuery(document).ready(function(){
             let chartData = chart.config.data;
             chartData.labels.push(this.getDateFromData(measureRow));
 
+            parseManager._rows = parseManager._rows || [];
+            parseManager._rows.push(measureRow);
+
             if (parseFloat(measureRow['upload']) > parseFloat(measureRow['download'])){
                 parseManager.uploadCount++;
             } else {
@@ -134,7 +222,7 @@ jQuery(document).ready(function(){
             }
 
             chartData.datasets[0].data.push(
-                measureRow['ping']
+                parseFloat(measureRow['ping']) > 1000 ? null : measureRow['ping']
             );
             chartData.datasets[1].data.push(
                 measureRow['upload']
@@ -176,6 +264,7 @@ jQuery(document).ready(function(){
 
             parseManager.uploadCount = 0;
             parseManager.downloadCount = 0;
+            parseManager._rows = [];
 
             chart.data.labels = [];
             chart.data.datasets.forEach(function(dataSet){
@@ -185,6 +274,17 @@ jQuery(document).ready(function(){
             parseManager._chart.update();
             callback();
             return true;
+        };
+
+        parseManager.updateHourlyChart = function(){
+            let parseManager = this;
+            let aggregated = aggregateByHourOfDay(parseManager._rows || []);
+            hourlyChartJS.data.labels = Array.apply(null, Array(24)).map(function(_, hour){
+                return ('0' + hour).slice(-2) + ':00';
+            });
+            hourlyChartJS.data.datasets[0].data = aggregated.upload;
+            hourlyChartJS.data.datasets[1].data = aggregated.download;
+            hourlyChartJS.update();
         };
 
 

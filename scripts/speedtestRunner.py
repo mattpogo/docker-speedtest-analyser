@@ -6,7 +6,6 @@
 
 import os
 import csv
-import datetime
 import time
 from speedtest import Speedtest
 
@@ -27,7 +26,38 @@ def do_speed_test():
         except Exception as e:
                 return None, e
 
+def prune_old_results():
+        if not os.path.isfile(FILEPATH) or os.stat(FILEPATH).st_size == 0:
+                return
+
+        cutoff_timestamp = (time.time() - 90 * 24 * 60 * 60) * 1000
+        batch_duration_ms = 7 * 24 * 60 * 60 * 1000
+        with open(FILEPATH, "r", newline="") as f:
+                rows = csv.DictReader(f)
+                first_row = next(rows, None)
+                if first_row is None:
+                        return
+
+                oldest_timestamp = float(first_row["timestamp"])
+                if oldest_timestamp >= cutoff_timestamp:
+                        return
+
+                # Remove at most seven days of the oldest stale data per run.
+                drop_before_timestamp = min(oldest_timestamp + batch_duration_ms, cutoff_timestamp)
+                recent_rows = [
+                        row for row in [first_row, *rows]
+                        if float(row["timestamp"]) >= drop_before_timestamp
+                ]
+
+        with open(FILEPATH, "w", newline="") as f:
+                csv_writer = csv.DictWriter(f, delimiter=',', lineterminator='\n', fieldnames=CSV_FIELDNAMES)
+                csv_writer.writeheader()
+                csv_writer.writerows(recent_rows)
+
 def runSpeedtest():
+        # Keep only the most recent 90 days, even if the speed test fails.
+        prune_old_results()
+
         #run speedtest-cli
         print('--- running speedtest ---')
 
@@ -45,7 +75,7 @@ def runSpeedtest():
                 print(ex)
 
         #collect speedtest data
-        ping = round(result['ping'], 2)
+        ping = min(1001, round(result['ping'], 2))
         download = round(result['download'] / 1000 / 1000, 2)
         upload = round(result['upload'] / 1000 / 1000, 2)
         timestamp = round(time.time() * 1000, 3)
@@ -59,12 +89,12 @@ def runSpeedtest():
         #write testdata to file
         isFileEmpty = not os.path.isfile(FILEPATH) or os.stat(FILEPATH).st_size == 0
 
-        with open(FILEPATH, "a") as f:
+        with open(FILEPATH, "a", newline="") as f:
                 csv_writer = csv.DictWriter(f, delimiter=',', lineterminator='\n', fieldnames=CSV_FIELDNAMES)
                 if isFileEmpty:
                         csv_writer.writeheader()
-
                 csv_writer.writerow(csv_data_dict)
+
 
         #print testdata
         print('--- Result ---')
